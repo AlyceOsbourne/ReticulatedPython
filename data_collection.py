@@ -96,6 +96,8 @@ def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, 
     #   I want it to iterate through pages so it will continue until exhaustion or until interrupt
 
     git = Github(login)
+
+
     print(f"Logged in as {git.get_user().login}")
 
     query = build_query(*query_strings, opensource_only=opensource_only)
@@ -129,5 +131,3 @@ def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, 
             break
 
     print(f"Found {total} files")
-
-grab_python_files = partial()

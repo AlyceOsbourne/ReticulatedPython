@@ -131,7 +131,10 @@ def collect(login: str,
             decoded = i.decoded_content.decode("ascii")
             padding = ('\n' * 3) + ('#' * 100) + ('\n' * 3)
             print(f"\tDecoded file:{padding}{decoded}{padding}")
-            yield decoded if not dump_to_ast else astor.dump_tree(ast.parse(decoded))
+            if dump_to_ast:
+                decoded = astor.dump_tree(ast.parse(decoded))
+                print(f"\tFile as AST:{padding}{decoded}{padding}")
+            yield decoded
             total += 1
             if batch_size and total >= batch_size:
                 break

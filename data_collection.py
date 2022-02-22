@@ -1,31 +1,29 @@
-import secret
+"""A collector class for files from GitHub, being used to train a NN how to code,
+"""
+
+import ast
+from functools import partial
+
+import astor
+import time
+
+from github import Github
+import github.GithubException
+from github.PaginatedList import PaginatedList
+from github.Repository import Repository
 
 
-def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, high_quality_only=True,
-            no_small_files=True, limit=0):
-    """This requires the pyGithub and astor modules"""
+def build_query(*query_strings, opensource_only=True, since=None, till=None, language="python") -> str:
+    """builds query strings for GitHub,
+    """
 
-    from github import Github
-    if dump_to_ast:
-        import ast, astor  # only import if needed
+    query = f"language:{language} "
 
-    git = Github(login)
-
-    print(f"Logged in as {git.get_user().login}")
-    print(git.rate_limiting, git.rate_limiting_resettime)
-
-    # part of the reason I have created a generator is that there is a request limit
-    # for the github rest api, so it almost makes sense to retrieve one at a time (or you can batch with the query)
-    # and process them as you go, the processing time acts as a sort of buffer time between requests
-
-    # the high quality flag makes the assumption that repositories with a high number of stars are more
-    # likely to be of a high quality than say a repository with say 4 stars,
-    # this is in th hope of providing higher quality data for the training model
-
-    query = "language:python "
+    if since is not None or till is not None:
+        query += f" created:{since if since else ''}{'..' + till if till else ''}"
 
     if query_strings:
-        query += ",".join(query_strings)  # this is for other query flags you may want to include
+        query += " ".join(query_strings)  # this is for other query flags you may want to include
 
     if opensource_only:  # really, this should never be false, only included for completeness
         accepted_licences = "mit", 'unlicense', "mpl-2.0"
@@ -37,55 +35,99 @@ def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, 
         print("\nWarning, data collected is not guaranteed to be open source, \n"
               "it is unsafe to use any derivative data from this generator for any commercial use,\n"
               "I do not take any responsibility for any user who disables this flag, nor will support be given\n"
-              "to anyone who has disabled this flag, you have been warned!\n")
+              "to anyone disabling this flag, you have been warned!\n")
 
-    print(f"finding repositories with query: {query}")
+    return query
 
-    query = git.search_repositories(query=query, sort="stars", order="desc")
 
-    print(f"Found {query.totalCount} repositories")
+def walk(res, directory="", extension=".py"):
+    """Recursive Generator that walks through the page, repo or directory and grabs files"""
+    # todo make operation skip known misc directories and files, such as .github or ISSUE_TEMPLATE
+    #   they take up calls pointlessly
+    skipped = ".github", "docs", "__pycache__", ".idea", "locale"
+    print(f" Searching {res.owner.login}/{res.name}/{directory}")
+    if isinstance(res, PaginatedList):
+        for repo in res:
 
-    end = False
+            if not isinstance(repo, Repository):
+                break
 
-    total_yielded = 0
+            for data in walk(repo):
+                yield data
 
-    for repository in query:
+    elif isinstance(res, Repository):
+        for _file in res.get_contents(directory):
+            if _file.name in skipped:
+                continue
+            # this sleep is to attempt to make sure requests are not limited,
+            # 5000 requests over an hour total 1 request every 1.3888888888889 seconds
+            time.sleep(1.4)
+            if _file.type == "dir":
+                print(f"    {_file.name} is subdirectory, searching...\n")
+                for i in walk(res, directory=_file.path):
+                    yield i
 
-        if limit and total_yielded >= limit:
+            elif _file.name.endswith(extension):
+                print(f"    Found candidate :{_file.name}")
+                yield _file
+
+
+def filtered_walk(results, minimum_stars=1500, minimum_file_size=1000, maximum_file_size=99999):
+    """A filtering function that filters repos going into walk and files coming out"""
+    for repository in results:
+        print("\nGetting next quality result")
+        if repository.get_stargazers().totalCount > minimum_stars:
+            print(
+                f" Found candidate result: {repository.owner.login}/{repository.name}, meets criteria, searching...\n")
+            for _file in walk(repository):
+                if minimum_file_size < _file.size < maximum_file_size:
+                    print(f"      Candidate file: {_file.name} meets criteria, returning for processing")
+                    yield _file
+                else:
+                    print(f"      Candidate file: {_file.name} does not meet criteria, moving on")
+                    continue
+        else:
+            print(
+                f" Found candidate res: {repository.owner.login}/{repository.name}, did not meet criteria, moving on\n")
+
+
+def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, filter_results=True, batch_size=0):
+    # todo need to create a batch requests collector, currently this just yields the 1000 from repos,
+    #   I want it to iterate through pages so it will continue until exhaustion or until interrupt
+
+    git = Github(login)
+    print(f"Logged in as {git.get_user().login}")
+
+    query = build_query(*query_strings, opensource_only=opensource_only)
+    print(f"Finding repositories with query: {query}")
+
+    results = git.search_repositories(query=query, sort="stars", order="desc")
+
+    print(f" Found {results.totalCount} repositories", "\n")
+
+    processing_func = filtered_walk if filter_results else walk
+    total = 0
+    for i in processing_func(results):
+
+        try:
+            yield i.decoded_content if not dump_to_ast else astor.dump_tree(ast.parse(i.decoded_content))
+            total += 1
+            if batch_size and total >= batch_size:
+                break
+
+        except (SyntaxError, ValueError, AttributeError, github.RateLimitExceededException) as e:
+            if isinstance(e, github.RateLimitExceededException):
+                print("Github ran out of internets, waiting on delivery")
+                time.sleep(3600)  # waits an hour, this is to make sure rate limit is reset
+            else:
+                print(f"file failed to parse to ast with error: {e.__class__.__name__}, "
+                      f"suggests bad data, discarding and moving on")
+
+            continue
+
+        except KeyboardInterrupt:
             break
 
-        if high_quality_only and repository.get_stargazers().totalCount > 2000 or not high_quality_only:
-            print(f"Searching {repository.owner.login}/{repository.name}")
-            for _file in repository.get_contents(""):
-                if limit and total_yielded >= limit:
-                    break
-                if _file.name.endswith(".py"):
-                    # if dump_to_ast takes the raw content, parses it into ast,
-                    # then dumps that ast as nice readable text (not that this matters to NN)
-                    # or if not dumping to ast returns the raw content
-                    if _file.size < 99999:
-                        if no_small_files and _file.size > 1000 or not no_small_files:
-                            print(f"    Found file {_file.name}, size {_file.size}")
-                            if dump_to_ast:
-                                try:
-                                    out = astor.dump_tree(ast.parse(_file.decoded_content))
-                                    yield out
-                                    total_yielded += 1
-                                except IndentationError:
-                                    continue
-                                except SyntaxError:
-                                    continue
-                            else:
-                                yield _file.decoded_content
-                                total_yielded += 1
+    print(f"Found {total} files")
 
-
-import requests
-
-headers = {
-    'Authorization': f'token {secret.github_login}',
-}
-
-response = requests.get('https://api.github.com/rate_limit', headers=headers)
-
-print(response.text.replace("},", "},\n"))
+grab_python_files = partial()

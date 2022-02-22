@@ -51,7 +51,7 @@ def walk(res, directory="", extension=".py"):
     """Recursive Generator that walks through the page, repo or directory and grabs files"""
     # todo make operation skip known misc directories and files, such as .github or ISSUE_TEMPLATE
     #   they take up calls pointlessly
-    skipped = ".github", "docs", "__pycache__", ".idea", "locale"
+    skipped = ".github", "docs", "__pycache__", ".idea", "locale", "changelogs"
     print(f" Searching {res.owner.login}/{res.name}/{directory}")
     if isinstance(res, PaginatedList):
         for repo in res:
@@ -107,7 +107,7 @@ def filtered_walk(results,
             )
 
 
-def collect(login: str,
+def collect(login: dict[str:str],
             *query_strings,
             opensource_only=True,
             dump_to_ast=True,
@@ -116,13 +116,18 @@ def collect(login: str,
     # todo need to create a batch requests collector, currently this just yields the 1000 from repos,
     #   I want it to iterate through pages so it will continue until exhaustion or until interrupt
 
-    git = Github(login)
+    git = Github(**login)
     print(f"Logged in as {git.get_user().login}")
     day_length = 86400
     step = 30
     end_time = time.time()
     start_time = end_time - (day_length * ((30 * 12) * 5))
+
+    total = 0
+
     for time_frame in reversed(range(int(start_time), int(end_time), int(day_length * step))):
+        if batch_size and total >= batch_size:
+            break
         query = build_query(*query_strings,
                             f" pushed:{datetime.datetime.utcfromtimestamp(time_frame - (day_length * step)).strftime('%Y-%m-%d')}..{datetime.datetime.utcfromtimestamp(time_frame).strftime('%Y-%m-%d')}",
                             opensource_only=opensource_only)
@@ -130,7 +135,6 @@ def collect(login: str,
         results = git.search_repositories(query=query, sort="stars", order="desc")
         print(f" Found {results.totalCount} repositories", "\n")
         processing_func = filtered_walk if filter_results else walk
-        total = 0
         for i in processing_func(results):
             try:
                 decoded = i.decoded_content
@@ -152,3 +156,28 @@ def collect(login: str,
                     continue
 
         print(f"Found {total} files")
+
+
+if __name__ == "__main__":
+
+    # just a little test, so you can see what kind of data it outputs
+
+    from getpass import getpass
+
+    username_or_token = getpass("Please insert your username or token: ")
+    password = getpass("please insert your password, leave blank if using token").strip(" \n\r\t")
+    if len(username_or_token) > 0 and len(password) > 0:
+        auth = {"login_or_token": username_or_token, "password": password}
+    elif len(username_or_token) > 0:
+        auth = {"login_or_token": username_or_token}
+    else:
+        print("Please provide authentication")
+        exit()
+
+    padding = ("\n" * 2) + ("#" * 100) + ("\n" * 2)
+
+    for i in collect(auth, batch_size=1, dump_to_ast=False):
+        print(padding, "Raw content of script", i.decode("utf8"), padding)
+
+    for i in collect(auth, batch_size=1):
+        print(padding, "AST representation of script", i, padding)

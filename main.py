@@ -1,3 +1,2 @@
 from common_modules import *
-
-train("Test_Tokens")
+train_tokenizer("Python_AST", 1_000_000)

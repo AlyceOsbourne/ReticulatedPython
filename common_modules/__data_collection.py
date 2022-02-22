@@ -1,7 +1,9 @@
-"""A collector class for files from GitHub, being used to train a NN how to code,
+"""A collector class for files from GitHub, being used to train_tokenizer a NN how to code,
 """
 
 import ast
+import datetime
+
 import astor
 import time
 
@@ -116,37 +118,38 @@ def collect(login: str,
 
     git = Github(login)
     print(f"Logged in as {git.get_user().login}")
+    day_length = 86400
+    step = 30
+    end_time = time.time()
+    start_time = end_time - (day_length * ((30 * 12) * 5))
+    for time_frame in reversed(range(int(start_time), int(end_time), int(day_length * step))):
+        query = build_query(*query_strings,
+                            f" pushed:{datetime.datetime.utcfromtimestamp(time_frame - (day_length * step)).strftime('%Y-%m-%d')}..{datetime.datetime.utcfromtimestamp(time_frame).strftime('%Y-%m-%d')}",
+                            opensource_only=opensource_only)
+        print(f"Finding repositories with query: {query}")
+        results = git.search_repositories(query=query, sort="stars", order="desc")
+        print(f" Found {results.totalCount} repositories", "\n")
+        processing_func = filtered_walk if filter_results else walk
+        total = 0
+        for i in processing_func(results):
+            try:
+                decoded = i.decoded_content
+                yield decoded if not dump_to_ast else astor.dump_tree(ast.parse(decoded))
+                total += 1
+                if batch_size and total >= batch_size:
+                    break
 
-    query = build_query(*query_strings, opensource_only=opensource_only)
-    print(f"Finding repositories with query: {query}")
+            except (SyntaxError, ValueError, AttributeError,
+                    github.RateLimitExceededException) as e:
+                if isinstance(e, github.RateLimitExceededException):
+                    print("Github ran out of internets, waiting on delivery")
+                    time.sleep(
+                        3600
+                    )  # waits an hour, this is to make sure rate limit is reset
+                else:
+                    print(
+                        f"file failed to parse to ast with error: {e.__class__.__name__}, "
+                        f"suggests bad data, discarding and moving on")
+                    continue
 
-    results = git.search_repositories(query=query, sort="stars", order="desc")
-
-    print(f" Found {results.totalCount} repositories", "\n")
-
-    processing_func = filtered_walk if filter_results else walk
-    total = 0
-    for i in processing_func(results):
-        try:
-            decoded = i.decoded_content.decode("ascii")
-            padding = ('\n' * 3) + ('#' * 100) + ('\n' * 3)
-            print(f"\tDecoded file:{padding}{decoded}{padding}")
-            yield decoded if not dump_to_ast else astor.dump_tree(ast.parse(decoded))
-            total += 1
-            if batch_size and total >= batch_size:
-                break
-
-        except (SyntaxError, ValueError, AttributeError,
-                github.RateLimitExceededException) as e:
-            if isinstance(e, github.RateLimitExceededException):
-                print("Github ran out of internets, waiting on delivery")
-                time.sleep(
-                    3600
-                )  # waits an hour, this is to make sure rate limit is reset
-            else:
-                print(
-                    f"file failed to parse to ast with error: {e.__class__.__name__}, "
-                    f"suggests bad data, discarding and moving on")
-                continue
-
-    print(f"Found {total} files")
+        print(f"Found {total} files")

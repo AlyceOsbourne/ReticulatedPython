@@ -10,6 +10,7 @@ import github.GithubException
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
+
 def build_query(*query_strings,
                 opensource_only=True,
                 since=None,
@@ -126,10 +127,11 @@ def collect(login: str,
     processing_func = filtered_walk if filter_results else walk
     total = 0
     for i in processing_func(results):
-
         try:
-            yield i.decoded_content if not dump_to_ast else astor.dump_tree(
-                ast.parse(i.decoded_content))
+            decoded = i.decoded_content.decode("ascii")
+            padding = ('\n' * 3) + ('#' * 100) + ('\n' * 3)
+            print(f"\tDecoded file:{padding}{decoded}{padding}")
+            yield decoded if not dump_to_ast else astor.dump_tree(ast.parse(decoded))
             total += 1
             if batch_size and total >= batch_size:
                 break
@@ -145,10 +147,6 @@ def collect(login: str,
                 print(
                     f"file failed to parse to ast with error: {e.__class__.__name__}, "
                     f"suggests bad data, discarding and moving on")
-
-            continue
-
-        except KeyboardInterrupt:
-            break
+                continue
 
     print(f"Found {total} files")

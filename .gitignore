@@ -1,4 +1,4 @@
-/common_modules/secret
+/secret
 .replit
 poetry.lock
 pyproject.toml

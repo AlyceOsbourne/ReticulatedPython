@@ -2,8 +2,6 @@
 """
 
 import ast
-from functools import partial
-
 import astor
 import time
 
@@ -12,8 +10,11 @@ import github.GithubException
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
-
-def build_query(*query_strings, opensource_only=True, since=None, till=None, language="python") -> str:
+def build_query(*query_strings,
+                opensource_only=True,
+                since=None,
+                till=None,
+                language="python") -> str:
     """builds query strings for GitHub,
     """
 
@@ -23,7 +24,9 @@ def build_query(*query_strings, opensource_only=True, since=None, till=None, lan
         query += f" created:{since if since else ''}{'..' + till if till else ''}"
 
     if query_strings:
-        query += " ".join(query_strings)  # this is for other query flags you may want to include
+        query += " ".join(
+            query_strings
+        )  # this is for other query flags you may want to include
 
     if opensource_only:  # really, this should never be false, only included for completeness
         accepted_licences = "mit", 'unlicense', "mpl-2.0"
@@ -32,10 +35,11 @@ def build_query(*query_strings, opensource_only=True, since=None, till=None, lan
         print("Searching for open source licenses", language_query)
 
     else:
-        print("\nWarning, data collected is not guaranteed to be open source, \n"
-              "it is unsafe to use any derivative data from this generator for any commercial use,\n"
-              "I do not take any responsibility for any user who disables this flag, nor will support be given\n"
-              "to anyone disabling this flag, you have been warned!\n")
+        print(
+            "\nWarning, data collected is not guaranteed to be open source, \n"
+            "it is unsafe to use any derivative data from this generator for any commercial use,\n"
+            "I do not take any responsibility for any user who disables this flag, nor will support be given\n"
+            "to anyone disabling this flag, you have been warned!\n")
 
     return query
 
@@ -72,26 +76,40 @@ def walk(res, directory="", extension=".py"):
                 yield _file
 
 
-def filtered_walk(results, minimum_stars=1500, minimum_file_size=1000, maximum_file_size=99999):
+def filtered_walk(results,
+                  minimum_stars=1500,
+                  minimum_file_size=1000,
+                  maximum_file_size=99999):
     """A filtering function that filters repos going into walk and files coming out"""
     for repository in results:
         print("\nGetting next quality result")
         if repository.get_stargazers().totalCount > minimum_stars:
             print(
-                f" Found candidate result: {repository.owner.login}/{repository.name}, meets criteria, searching...\n")
+                f" Found candidate result: {repository.owner.login}/{repository.name}, meets criteria, searching...\n"
+            )
             for _file in walk(repository):
                 if minimum_file_size < _file.size < maximum_file_size:
-                    print(f"      Candidate file: {_file.name} meets criteria, returning for processing")
+                    print(
+                        f"      Candidate file: {_file.name} meets criteria, returning for processing"
+                    )
                     yield _file
                 else:
-                    print(f"      Candidate file: {_file.name} does not meet criteria, moving on")
+                    print(
+                        f"      Candidate file: {_file.name} does not meet criteria, moving on"
+                    )
                     continue
         else:
             print(
-                f" Found candidate res: {repository.owner.login}/{repository.name}, did not meet criteria, moving on\n")
+                f" Found candidate res: {repository.owner.login}/{repository.name}, did not meet criteria, moving on\n"
+            )
 
 
-def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, filter_results=True, batch_size=0):
+def collect(login: str,
+            *query_strings,
+            opensource_only=True,
+            dump_to_ast=True,
+            filter_results=True,
+            batch_size=0):
     # todo need to create a batch requests collector, currently this just yields the 1000 from repos,
     #   I want it to iterate through pages so it will continue until exhaustion or until interrupt
 
@@ -110,18 +128,23 @@ def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, 
     for i in processing_func(results):
 
         try:
-            yield i.decoded_content if not dump_to_ast else astor.dump_tree(ast.parse(i.decoded_content))
+            yield i.decoded_content if not dump_to_ast else astor.dump_tree(
+                ast.parse(i.decoded_content))
             total += 1
             if batch_size and total >= batch_size:
                 break
 
-        except (SyntaxError, ValueError, AttributeError, github.RateLimitExceededException) as e:
+        except (SyntaxError, ValueError, AttributeError,
+                github.RateLimitExceededException) as e:
             if isinstance(e, github.RateLimitExceededException):
                 print("Github ran out of internets, waiting on delivery")
-                time.sleep(3600)  # waits an hour, this is to make sure rate limit is reset
+                time.sleep(
+                    3600
+                )  # waits an hour, this is to make sure rate limit is reset
             else:
-                print(f"file failed to parse to ast with error: {e.__class__.__name__}, "
-                      f"suggests bad data, discarding and moving on")
+                print(
+                    f"file failed to parse to ast with error: {e.__class__.__name__}, "
+                    f"suggests bad data, discarding and moving on")
 
             continue
 

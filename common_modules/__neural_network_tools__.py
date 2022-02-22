@@ -1,15 +1,14 @@
 from __future__ import annotations
 import os
 from tokenizers.implementations import ByteLevelBPETokenizer
-from data_collection import collect
+from common_modules.data_collection import collect
 
-login = os.getenv("github_login")
-if not login:
-    login = open("secret").read()
 tokenizer = ByteLevelBPETokenizer(dropout=100)
-tokenizer.train_from_iterator(collect(login, batch_size=1000),
-                              min_frequency=1000,
-                              vocab_size=20_000)
-tokenizer.save("test", pretty=True)
+def train(batch_size):
+	login = os.getenv("github_login")
+	if not login:
+	    login = open("secret").read()
+		tokenizer.train_from_iterator(collect(login, batch_size=batch_size), min_frequency=1000, vocab_size=20_000)
+	print("Training Complete")
+	tokenizer.save("python_tokens", pretty=True)
 
-#print(tokenizer.to_str(True))

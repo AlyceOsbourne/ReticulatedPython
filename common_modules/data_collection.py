@@ -129,5 +129,3 @@ def collect(login: str, *query_strings, opensource_only=True, dump_to_ast=True, 
             break
 
     print(f"Found {total} files")
-
-grab_python_files = partial()

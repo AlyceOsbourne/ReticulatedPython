@@ -13,7 +13,7 @@ def train(filename, batch_size=0):
     login = os.getenv("github_login")
     if not login:
         login = open("secret").read()
-    tokenizer.train_from_iterator(collect(login, batch_size=batch_size), min_frequency=100, vocab_size=20_000)
+    tokenizer.train_from_iterator(collect(login, batch_size=batch_size), min_frequency=1000, vocab_size=20_000)
     print("Training Complete")
     print(tokenizer.to_str(pretty=True))
     tokenizer.save(filename, pretty=True)

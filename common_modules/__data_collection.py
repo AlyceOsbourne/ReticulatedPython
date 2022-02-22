@@ -107,7 +107,7 @@ def filtered_walk(results,
             )
 
 
-def collect(login: dict[str:str],
+def collect(login,
             *query_strings,
             opensource_only=True,
             dump_to_ast=True,

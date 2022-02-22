@@ -138,7 +138,6 @@ def collect(login: str,
                 total += 1
                 if batch_size and total >= batch_size:
                     break
-
             except (SyntaxError, ValueError, AttributeError,
                     github.RateLimitExceededException) as e:
                 if isinstance(e, github.RateLimitExceededException):

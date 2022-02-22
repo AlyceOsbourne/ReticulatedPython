@@ -4,3 +4,4 @@ rich~=11.2.0
 astor~=0.8.1
 tokenizers~=0.11.5
 PyGithub~=1.55
+transformers~=4.16.2

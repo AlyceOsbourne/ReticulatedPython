@@ -8,7 +8,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer as Tokenizer
 
 from common_modules.__data_collection import collect
 
-tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt", dropout=10)
+tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt", dropout=0.7)
 
 
 def data_to_ast(iterator):

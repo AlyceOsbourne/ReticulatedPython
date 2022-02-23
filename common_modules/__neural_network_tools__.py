@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
-import os
 import ast
+import os
 
 import astor
 from tokenizers.implementations import ByteLevelBPETokenizer as Tokenizer
+
 from common_modules.__data_collection import collect
 
 tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt")
@@ -14,7 +14,7 @@ tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.
 def data_to_ast(iterator):
     for _file in iterator:
         try:
-            # yielding the "pretty" dump so we can split on \n to tokenize into statements
+            # yielding the "pretty" dump, so we can split on \n to tokenize into statements
             yield astor.dump_tree(ast.parse(_file))
         except (SyntaxError, ValueError, AttributeError) as e:
             print(
@@ -35,6 +35,7 @@ def split_lines(iterator):
 def process_github(login, batch_size):
     for i in split_lines(data_to_ast(collect(login, batch_size=batch_size))):
         yield i
+
 
 def train_tokenizer(filename, batch_size=0):
     login = os.getenv("github_login")

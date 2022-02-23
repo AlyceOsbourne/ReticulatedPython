@@ -68,8 +68,8 @@ def walk(res, directory="", extension=".py"):
             time.sleep(1.4)
             if _file.type == "dir":
                 print(f"    {_file.name} is subdirectory, searching...\n")
-                for i in walk(res, directory=_file.path):
-                    yield i
+                for __file in walk(res, directory=_file.path):
+                    yield __file
 
             elif _file.name.endswith(extension):
                 print(f"    Found candidate :{_file.name}")
@@ -90,12 +90,12 @@ def filtered_walk(results,
             for _file in walk(repository):
                 if minimum_file_size < _file.size < maximum_file_size:
                     print(
-                        f"      Candidate file: {_file.name} meets criteria, returning for processing"
+                        f"     Candidate file: {_file.name} meets criteria, returning for processing"
                     )
                     yield _file
                 else:
                     print(
-                        f"      Candidate file: {_file.name} does not meet criteria, moving on"
+                        f"     Candidate file: {_file.name} does not meet criteria, moving on\n"
                     )
                     continue
         else:
@@ -116,7 +116,12 @@ def collect(login,
     print(f"Logged in as {git.get_user().login}")
     day_length = 86400
     step = 30
-    end_time = time.time()
+
+    try:
+        end_time = int(open("last_checked").read()) - day_length
+    except FileNotFoundError:
+        end_time = time.time()
+
     start_time = end_time - (day_length * ((30 * 12) * 5))
 
     total = 0
@@ -125,48 +130,36 @@ def collect(login,
         if batch_size and total >= batch_size:
             break
         query = build_query(*query_strings,
-                            f" pushed:{datetime.datetime.utcfromtimestamp(time_frame - (day_length * step)).strftime('%Y-%m-%d')}..{datetime.datetime.utcfromtimestamp(time_frame).strftime('%Y-%m-%d')}",
+                            f" pushed:"
+                            f"{datetime.datetime.utcfromtimestamp(time_frame - (day_length * step)).strftime('%Y-%m-%d')}"
+                            f".."
+                            f"{datetime.datetime.utcfromtimestamp(time_frame).strftime('%Y-%m-%d')}",
                             opensource_only=opensource_only)
         print(f"Finding repositories with query: {query}")
         results = git.search_repositories(query=query, sort="stars", order="desc")
         print(f" Found {results.totalCount} repositories", "\n")
         processing_func = filtered_walk if filter_results else walk
 
-        for i in processing_func(results):
+        for _file in processing_func(results):
             try:
-                decoded = i.decoded_content
-                yield decoded
-                total += 1
+                decoded = _file.decoded_content
+                if decoded.isascii():
+                    print(f"     File {total + 1} is readable, processing")
+                    yield decoded
+                    total += 1
+                else:
+                    print("     File is unreadable, moving on\n")
+                    continue
+
                 if batch_size and total >= batch_size:
                     break
 
-            except github.RateLimitExceededException as e:
+            except github.RateLimitExceededException:
                 print("Github ran out of internets, waiting on delivery")
                 time.sleep(
                     3600
                 )  # waits an hour, this is to make sure rate limit is reset
 
         print(f"Found {total} files")
-
-
-if __name__ == "__main__":
-
-    # just a little test, so you can see what kind of data it outputs
-
-    from getpass import getpass
-
-    username_or_token = getpass("Please insert your username or token: ")
-    password = getpass("please insert your password, leave blank if using token").strip(" \n\r\t")
-    auth = None
-    if len(username_or_token) > 0 and len(password) > 0:
-        auth = {"login_or_token": username_or_token, "password": password}
-    elif len(username_or_token) > 0:
-        auth = {"login_or_token": username_or_token}
-    else:
-        print("Please provide authentication")
-        exit()
-
-    padding = ("\n" * 2) + ("#" * 100) + ("\n" * 2)
-
-    for i in collect(auth, batch_size=1):
-        print(padding, "AST representation of script", i, padding)
+        with open("last_checked", "w") as f:
+            f.write(str(time_frame))

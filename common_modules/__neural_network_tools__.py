@@ -1,12 +1,14 @@
 from __future__ import annotations
+
+import json
 import os
 import ast
 
 import astor
-from tokenizers.implementations import SentencePieceBPETokenizer as Tokenizer
+from tokenizers.implementations import ByteLevelBPETokenizer as Tokenizer
 from common_modules.__data_collection import collect
 
-tokenizer = Tokenizer()
+tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt")
 
 
 def data_to_ast(iterator):
@@ -27,21 +29,20 @@ def split_lines(iterator):
         lines = _file.split("\n")
         print(f"        File split into {len(lines)} lines\n")
         for line in lines:
-            yield line
+            yield line.strip()
 
+
+def process_github(login, batch_size):
+    for i in split_lines(data_to_ast(collect(login, batch_size=batch_size))):
+        yield i
 
 def train_tokenizer(filename, batch_size=0):
     login = os.getenv("github_login")
     if not login:
         login = open("secret").read()
     login = {"login_or_token": login}
-    tokenizer.train_from_iterator(split_lines(data_to_ast(collect(login, batch_size=batch_size))), min_frequency=1000,
+    tokenizer.train_from_iterator(process_github(login, batch_size), min_frequency=1000,
                                   vocab_size=20_000, show_progress=False)
     print("Training Complete")
     print(tokenizer.to_str(pretty=True))
     tokenizer.save_model(".", filename)
-
-
-def process_github(login, batch_size):
-    for i in split_lines(data_to_ast(collect(login, batch_size=batch_size))):
-        yield i

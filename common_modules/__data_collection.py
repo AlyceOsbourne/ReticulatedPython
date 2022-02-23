@@ -1,14 +1,11 @@
-"""A collector class for files from GitHub, being used to train_tokenizer a NN how to code,
+"""A collector class for files from GitHub, being used to train a NN how to code,
 """
 
-import ast
 import datetime
-
-import astor
 import time
 
-from github import Github
 import github.GithubException
+from github import Github
 from github.PaginatedList import PaginatedList
 from github.Repository import Repository
 
@@ -110,7 +107,6 @@ def filtered_walk(results,
 def collect(login,
             *query_strings,
             opensource_only=True,
-            dump_to_ast=True,
             filter_results=True,
             batch_size=0):
     # todo need to create a batch requests collector, currently this just yields the 1000 from repos,
@@ -135,25 +131,20 @@ def collect(login,
         results = git.search_repositories(query=query, sort="stars", order="desc")
         print(f" Found {results.totalCount} repositories", "\n")
         processing_func = filtered_walk if filter_results else walk
+
         for i in processing_func(results):
             try:
                 decoded = i.decoded_content
-                yield decoded if not dump_to_ast else astor.dump_tree(ast.parse(decoded))
+                yield decoded
                 total += 1
                 if batch_size and total >= batch_size:
                     break
-            except (SyntaxError, ValueError, AttributeError,
-                    github.RateLimitExceededException) as e:
-                if isinstance(e, github.RateLimitExceededException):
-                    print("Github ran out of internets, waiting on delivery")
-                    time.sleep(
-                        3600
-                    )  # waits an hour, this is to make sure rate limit is reset
-                else:
-                    print(
-                        f"file failed to parse to ast with error: {e.__class__.__name__}, "
-                        f"suggests bad data, discarding and moving on")
-                    continue
+
+            except github.RateLimitExceededException as e:
+                print("Github ran out of internets, waiting on delivery")
+                time.sleep(
+                    3600
+                )  # waits an hour, this is to make sure rate limit is reset
 
         print(f"Found {total} files")
 
@@ -166,6 +157,7 @@ if __name__ == "__main__":
 
     username_or_token = getpass("Please insert your username or token: ")
     password = getpass("please insert your password, leave blank if using token").strip(" \n\r\t")
+    auth = None
     if len(username_or_token) > 0 and len(password) > 0:
         auth = {"login_or_token": username_or_token, "password": password}
     elif len(username_or_token) > 0:
@@ -175,9 +167,6 @@ if __name__ == "__main__":
         exit()
 
     padding = ("\n" * 2) + ("#" * 100) + ("\n" * 2)
-
-    for i in collect(auth, batch_size=1, dump_to_ast=False):
-        print(padding, "Raw content of script", i.decode("utf8"), padding)
 
     for i in collect(auth, batch_size=1):
         print(padding, "AST representation of script", i, padding)

@@ -77,7 +77,7 @@ def walk(res, directory="", extension=".py"):
 
 
 def filtered_walk(results,
-                  minimum_stars=1500,
+                  minimum_stars=2500,
                   minimum_file_size=1000,
                   maximum_file_size=99999):
     """A filtering function that filters repos going into walk and files coming out"""

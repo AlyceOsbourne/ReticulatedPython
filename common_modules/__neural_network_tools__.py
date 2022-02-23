@@ -8,7 +8,7 @@ from tokenizers.implementations import ByteLevelBPETokenizer as Tokenizer
 
 from common_modules.__data_collection import collect
 
-tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt")
+tokenizer = Tokenizer("tokens/Python_AST-vocab.json", "tokens/Python_AST-merges.txt", dropout=10)
 
 
 def data_to_ast(iterator):
@@ -42,8 +42,8 @@ def train_tokenizer(filename, batch_size=0):
     if not login:
         login = open("secret").read()
     login = {"login_or_token": login}
-    tokenizer.train_from_iterator(process_github(login, batch_size), min_frequency=1000,
-                                  vocab_size=20_000, show_progress=False)
+    tokenizer.train_from_iterator(process_github(login, batch_size), min_frequency=2000,
+                                  vocab_size=10_000, show_progress=False)
     print("Training Complete")
     print(tokenizer.to_str(pretty=True))
     tokenizer.save_model(".", filename)

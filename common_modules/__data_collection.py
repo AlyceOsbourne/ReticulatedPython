@@ -77,7 +77,7 @@ def walk(res, directory="", extension=".py"):
 
 
 def filtered_walk(results,
-                  minimum_stars=2500,
+                  minimum_stars=2000,
                   minimum_file_size=1000,
                   maximum_file_size=99999):
     """A filtering function that filters repos going into walk and files coming out"""
@@ -98,10 +98,13 @@ def filtered_walk(results,
                         f"     Candidate file: {_file.name} does not meet criteria, moving on\n"
                     )
                     continue
+        
         else:
             print(
-                f" Found candidate res: {repository.owner.login}/{repository.name}, did not meet criteria, moving on\n"
+                f" Found candidate res: {repository.owner.login}/{repository.name}, did not meet criteria, this means we have hit the end of high starred repositories, ending search.\n"
             )
+        break
+        
 
 
 def collect(login,
@@ -115,14 +118,14 @@ def collect(login,
     git = Github(**login)
     print(f"Logged in as {git.get_user().login}")
     day_length = 86400
-    step = 30
+    step = 7 # weekly steps
 
     try:
         end_time = int(open("last_checked").read()) - day_length
     except FileNotFoundError:
         end_time = time.time()
 
-    start_time = end_time - (day_length * ((30 * 12) * 5))
+    start_time = end_time - (day_length * (356 * 10))
 
     total = 0
 
